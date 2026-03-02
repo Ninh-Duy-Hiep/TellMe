@@ -1,0 +1,128 @@
+[
+  {
+    "ContainingType": "TellMe.Controllers.PostController",
+    "Method": "CreatePostWithMultiplePhotos",
+    "RelativePath": "facebook/publish-multiple-photos",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "content",
+        "Type": "System.String",
+        "IsRequired": false
+      },
+      {
+        "Name": "files",
+        "Type": "System.Collections.Generic.List\u00601[[Microsoft.AspNetCore.Http.IFormFile, Microsoft.AspNetCore.Http.Features, Version=8.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60]]",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "TellMe.Controllers.ChatController",
+    "Method": "VerifyWebhook",
+    "RelativePath": "webhook",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "hub.mode",
+        "Type": "System.String",
+        "IsRequired": false
+      },
+      {
+        "Name": "hub.verify_token",
+        "Type": "System.String",
+        "IsRequired": false
+      },
+      {
+        "Name": "hub.challenge",
+        "Type": "System.String",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "TellMe.Controllers.ChatController",
+    "Method": "ReceiveMessage",
+    "RelativePath": "webhook",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "body",
+        "Type": "TellMe.DTOs.FacebookWebhookBody",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "TellMe.Controllers.ChatController",
+    "Method": "GetConversations",
+    "RelativePath": "webhook/conversations",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "page",
+        "Type": "System.Int32",
+        "IsRequired": false
+      },
+      {
+        "Name": "limit",
+        "Type": "System.Int32",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "TellMe.Controllers.ChatController",
+    "Method": "GetChatHistory",
+    "RelativePath": "webhook/history/{psid}",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "psid",
+        "Type": "System.String",
+        "IsRequired": true
+      },
+      {
+        "Name": "page",
+        "Type": "System.Int32",
+        "IsRequired": false
+      },
+      {
+        "Name": "limit",
+        "Type": "System.Int32",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "TellMe.Controllers.ChatController",
+    "Method": "ReplyToCustomer",
+    "RelativePath": "webhook/send",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "request",
+        "Type": "TellMe.DTOs.SendMessageRequest",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  }
+]
