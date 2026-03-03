@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace TellMe.Models
 {
@@ -13,6 +14,7 @@ namespace TellMe.Models
 
         public bool IsReply { get; set; } = false;
 
+        [Column(TypeName = "timestamp")]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }

@@ -31,7 +31,7 @@ namespace TellMe.Controllers
                 if (mode == "subscribe" && token == verifyToken)
                 {
                     Console.WriteLine("WEBHOOK_VERIFIED");
-                    return Ok(challenge);
+                    return Content(challenge, "text/plain");
                 }
                 else
                 {

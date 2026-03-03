@@ -1,7 +1,9 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using System.Text;
 using System.Text.Json;
 using TellMe.Data;
+using TellMe.Hubs;
 using TellMe.Models;
 
 namespace TellMe.Services
@@ -11,12 +13,14 @@ namespace TellMe.Services
         private readonly AppDbContext _context;
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _configuration;
+        private readonly IHubContext<ChatHub> _hubContext;
 
-        public ChatService(AppDbContext context, HttpClient httpClient, IConfiguration configuration)
+        public ChatService(AppDbContext context, HttpClient httpClient, IConfiguration configuration, IHubContext<ChatHub> hubContext)
         {
             _context = context;
             _httpClient = httpClient;
             _configuration = configuration;
+            _hubContext = hubContext;
         }
 
         public async Task<FacebookMessage> SaveIncomingMessageAsync(string senderPsid, string text)
@@ -31,6 +35,8 @@ namespace TellMe.Services
             _context.FacebookMessages.Add(newMessage);
             await _context.SaveChangesAsync();
 
+            await _hubContext.Clients.All.SendAsync("ReceiveNewMessage", newMessage);
+
             return newMessage;
         }
 
@@ -40,11 +46,13 @@ namespace TellMe.Services
             {
                 SenderPsid = recipientPsid,
                 Text = text,
-                IsReply = true // Đánh dấu đây là tin nhắn của page gửi đi
+                IsReply = true
             };
 
             _context.FacebookMessages.Add(newMessage);
             await _context.SaveChangesAsync();
+
+            await _hubContext.Clients.All.SendAsync("ReceiveNewMessage", newMessage);
 
             return newMessage;
         }
@@ -107,55 +115,39 @@ namespace TellMe.Services
                 .Take(limit)
                 .ToListAsync();
 
+            var lastMessageDict = new Dictionary<string, FacebookMessage>();
+            foreach (var conv in conversations)
+            {
+                var msg = await _context.FacebookMessages
+                    .Where(m => m.SenderPsid == conv.SenderPsid)
+                    .OrderByDescending(m => m.CreatedAt)
+                    .FirstOrDefaultAsync();
+                
+                if (msg != null)
+                {
+                    lastMessageDict[conv.SenderPsid] = msg;
+                }
+            }
+
             var pageAccessToken = _configuration["Facebook:PageToken"];
 
             var enrichmentTasks = conversations.Select(async c =>
             {
-                string customerName = "";
-                string avatarUrl = "";
-
-                string firstName = "";
-                string lastName = "";
-
-                var url = $"https://graph.facebook.com/{c.SenderPsid}?fields=first_name,last_name,profile_pic&access_token={pageAccessToken}";
-
-                try
-                {
-                    var response = await _httpClient.GetAsync(url);
-                    if (response.IsSuccessStatusCode)
-                    {
-                        var jsonString = await response.Content.ReadAsStringAsync();
-
-                        using (JsonDocument doc = JsonDocument.Parse(jsonString))
-                        {
-                            var root = doc.RootElement;
-
-                            firstName = root.TryGetProperty("first_name", out var fn) ? (fn.GetString() ?? "") : "";
-                            lastName = root.TryGetProperty("last_name", out var ln) ? (ln.GetString() ?? "") : "";
-
-                            customerName = $"{lastName} {firstName}".Trim();
-
-                            if (root.TryGetProperty("profile_pic", out var pic))
-                            {
-                                avatarUrl = pic.GetString() ?? avatarUrl;
-                            }
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Lỗi khi lấy thông tin FB cho PSID {c.SenderPsid}: {ex.Message}");
-                }
+                var profile = await GetFacebookUserProfileAsync(c.SenderPsid, pageAccessToken);
+                
+                var lastMsg = lastMessageDict.ContainsKey(c.SenderPsid) ? lastMessageDict[c.SenderPsid] : null;
 
                 return new
                 {
                     SenderPsid = c.SenderPsid,
-                    CustomerName = string.IsNullOrEmpty(customerName) ? "Khách hàng" : customerName,
-                    FirstName = firstName,
-                    LastName = lastName,
-                    AvatarUrl = avatarUrl,
+                    CustomerName = profile.CustomerName,
+                    FirstName = profile.FirstName,
+                    LastName = profile.LastName,
+                    AvatarUrl = profile.AvatarUrl,
                     TotalMessages = c.TotalMessages,
-                    LastInteractionAt = c.LastInteractionAt
+                    LastInteractionAt = c.LastInteractionAt,
+                    LastMessageText = lastMsg?.Text ?? "",
+                    LastMessageIsReply = lastMsg?.IsReply ?? false
                 };
             });
 
@@ -183,11 +175,70 @@ namespace TellMe.Services
 
             messages.Reverse();
 
+            var pageAccessToken = _configuration["Facebook:PageToken"];
+            var profile = await GetFacebookUserProfileAsync(psid, pageAccessToken);
+
             return new
             {
+                customer = new 
+                {
+                    psid = psid,
+                    name = profile.CustomerName,
+                    avatarUrl = profile.AvatarUrl
+                },
                 data = messages,
-                pagination = new { totalItems, totalPages, currentPage = page, limit }
+                meta = new { totalItems, totalPages, currentPage = page, limit }
             };
+        }
+
+        private async Task<(string FirstName, string LastName, string CustomerName, string AvatarUrl)> GetFacebookUserProfileAsync(string psid, string pageAccessToken)
+        {
+            string customerName = "";
+            string avatarUrl = "";
+            string firstName = "";
+            string lastName = "";
+
+            var url = $"https://graph.facebook.com/{psid}?fields=first_name,last_name,profile_pic&access_token={pageAccessToken}";
+
+            try
+            {
+                var response = await _httpClient.GetAsync(url);
+                if (response.IsSuccessStatusCode)
+                {
+                    var jsonString = await response.Content.ReadAsStringAsync();
+
+                    using (JsonDocument doc = JsonDocument.Parse(jsonString))
+                    {
+                        var root = doc.RootElement;
+
+                        firstName = root.TryGetProperty("first_name", out var fn) ? (fn.GetString() ?? "") : "";
+                        lastName = root.TryGetProperty("last_name", out var ln) ? (ln.GetString() ?? "") : "";
+
+                        customerName = $"{lastName} {firstName}".Trim();
+
+                        if (root.TryGetProperty("profile_pic", out var pic))
+                        {
+                            avatarUrl = pic.GetString() ?? avatarUrl;
+                        }
+                    }
+                }
+                else 
+                {
+                    customerName = psid;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Lỗi khi lấy thông tin FB cho PSID {psid}: {ex.Message}");
+                customerName = psid;
+            }
+
+            if (string.IsNullOrEmpty(customerName))
+            {
+                customerName = "Khách hàng";
+            }
+
+            return (firstName, lastName, customerName, avatarUrl);
         }
     }
 }

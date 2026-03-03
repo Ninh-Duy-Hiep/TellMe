@@ -10,6 +10,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
 
 builder.Services.AddControllers();
+builder.Services.AddSignalR(); 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -54,5 +55,6 @@ app.UseCors("AllowAll");
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<TellMe.Hubs.ChatHub>("/chatHub"); 
 
 app.Run();
