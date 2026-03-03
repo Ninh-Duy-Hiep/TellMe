@@ -23,13 +23,16 @@ namespace TellMe.Services
             _hubContext = hubContext;
         }
 
-        public async Task<FacebookMessage> SaveIncomingMessageAsync(string senderPsid, string text)
+        public async Task<FacebookMessage> SaveIncomingMessageAsync(string messageId, string senderPsid, string text, string? replyToId = null, string? forwardedMessageId = null)
         {
             var newMessage = new FacebookMessage
             {
+                Id = messageId,
                 SenderPsid = senderPsid,
                 Text = text,
-                IsReply = false
+                IsReply = false,
+                ReplyToId = replyToId,
+                ForwardedMessageId = forwardedMessageId
             };
 
             _context.FacebookMessages.Add(newMessage);
@@ -40,13 +43,16 @@ namespace TellMe.Services
             return newMessage;
         }
 
-        public async Task<FacebookMessage> SaveOutgoingMessageAsync(string recipientPsid, string text)
+        public async Task<FacebookMessage> SaveOutgoingMessageAsync(string messageId, string recipientPsid, string text, string? replyToId = null, string? forwardedMessageId = null)
         {
             var newMessage = new FacebookMessage
             {
+                Id = messageId,
                 SenderPsid = recipientPsid,
                 Text = text,
-                IsReply = true
+                IsReply = true,
+                ReplyToId = replyToId,
+                ForwardedMessageId = forwardedMessageId
             };
 
             _context.FacebookMessages.Add(newMessage);
@@ -57,15 +63,30 @@ namespace TellMe.Services
             return newMessage;
         }
 
-        public async Task<object> SendMessageToFacebookAsync(string recipientPsid, string text)
+        public async Task<(bool success, string? messageId, string? error)> SendMessageToFacebookAsync(string recipientPsid, string text, string? replyToId = null)
         {
             var pageAccessToken = _configuration["Facebook:PageToken"];
             var url = $"https://graph.facebook.com/v19.0/me/messages?access_token={pageAccessToken}";
 
+            object messagePayload;
+
+            if (!string.IsNullOrEmpty(replyToId))
+            {
+                messagePayload = new
+                {
+                    text = text,
+                    reply_to = new { mid = replyToId }
+                };
+            }
+            else
+            {
+                messagePayload = new { text = text };
+            }
+
             var payload = new
             {
                 recipient = new { id = recipientPsid },
-                message = new { text = text },
+                message = messagePayload,
                 messaging_type = "RESPONSE"
             };
 
@@ -80,18 +101,23 @@ namespace TellMe.Services
                 if (response.IsSuccessStatusCode)
                 {
                     Console.WriteLine($"[System -> FB] Da gui thanh cong den ID {recipientPsid}");
-                    return new { success = true, data = JsonSerializer.Deserialize<object>(responseData) };
+                    using (JsonDocument doc = JsonDocument.Parse(responseData))
+                    {
+                        var root = doc.RootElement;
+                        var messageId = root.TryGetProperty("message_id", out var mid) ? mid.GetString() : null;
+                        return (true, messageId, null);
+                    }
                 }
                 else
                 {
                     Console.WriteLine($"Lỗi gửi tin nhắn FB: {responseData}");
-                    return new { success = false, error = responseData };
+                    return (false, null, responseData);
                 }
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Lỗi gửi tin nhắn FB: {ex.Message}");
-                return new { success = false, error = ex.Message };
+                return (false, null, ex.Message);
             }
         }
 
@@ -175,6 +201,16 @@ namespace TellMe.Services
 
             messages.Reverse();
 
+            var mappedData = messages.Select(m => new {
+                id = m.Id,
+                senderPsid = m.SenderPsid,
+                text = m.Text,
+                isReply = m.IsReply,
+                createdAt = m.CreatedAt,
+                replyToId = m.ReplyToId,
+                forwardedMessageId = m.ForwardedMessageId
+            });
+
             var pageAccessToken = _configuration["Facebook:PageToken"];
             var profile = await GetFacebookUserProfileAsync(psid, pageAccessToken);
 
@@ -186,7 +222,7 @@ namespace TellMe.Services
                     name = profile.CustomerName,
                     avatarUrl = profile.AvatarUrl
                 },
-                data = messages,
+                data = mappedData,
                 meta = new { totalItems, totalPages, currentPage = page, limit }
             };
         }

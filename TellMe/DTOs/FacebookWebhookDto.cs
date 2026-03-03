@@ -50,13 +50,25 @@ namespace TellMe.DTOs
         [JsonPropertyName("text")]
         public string? Text { get; set; }
 
+        [JsonPropertyName("reply_to")]
+        public WebhookReplyTo? ReplyTo { get; set; }
+
         [JsonPropertyName("is_echo")]
         public bool IsEcho { get; set; }
+    }
+
+    public class WebhookReplyTo
+    {
+        [JsonPropertyName("mid")]
+        public string Mid { get; set; } = string.Empty;
     }
 
     public class SendMessageRequest
     {
         public string Psid { get; set; } = string.Empty;
         public string Text { get; set; } = string.Empty;
+
+        public string? ReplyToId { get; set; }
+        public string? ForwardedMessageId { get; set; }
     }
 }

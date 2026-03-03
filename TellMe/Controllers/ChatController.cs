@@ -62,14 +62,26 @@ namespace TellMe.Controllers
                             if (!string.IsNullOrEmpty(recipientPsid) && !string.IsNullOrEmpty(messageText))
                             {
                                 Console.WriteLine($"[FB Chat Echo] Page vua nhan cho {recipientPsid}: {messageText}");
-                                await _chatService.SaveOutgoingMessageAsync(recipientPsid, messageText);
+                                await _chatService.SaveOutgoingMessageAsync(
+                                    webhookEvent.Message.Mid ?? $"echo_{Guid.NewGuid()}",
+                                    recipientPsid, 
+                                    messageText,
+                                    webhookEvent.Message.ReplyTo?.Mid,
+                                    null
+                                );
                             }
                         }
                         else if (webhookEvent.Message != null && !string.IsNullOrEmpty(webhookEvent.Message.Text))
                         {
                             var messageText = webhookEvent.Message.Text;
                             Console.WriteLine($"[FB Chat] Nhan tu {senderPsid}: {messageText}");
-                            await _chatService.SaveIncomingMessageAsync(senderPsid, messageText);
+                            await _chatService.SaveIncomingMessageAsync(
+                                webhookEvent.Message.Mid ?? $"msg_{Guid.NewGuid()}",
+                                senderPsid, 
+                                messageText,
+                                webhookEvent.Message.ReplyTo?.Mid,
+                                null
+                            );
                         }
                     }
                 }
@@ -84,8 +96,20 @@ namespace TellMe.Controllers
         [HttpPost("send")]
         public async Task<IActionResult> ReplyToCustomer([FromBody] SendMessageRequest request)
         {
-            var result = await _chatService.SendMessageToFacebookAsync(request.Psid, request.Text);
-            return Ok(result);
+            var result = await _chatService.SendMessageToFacebookAsync(request.Psid, request.Text, request.ReplyToId);
+            
+            if (result.success && !string.IsNullOrEmpty(result.messageId))
+            {
+                await _chatService.SaveOutgoingMessageAsync(
+                    result.messageId,
+                    request.Psid, 
+                    request.Text, 
+                    request.ReplyToId, 
+                    request.ForwardedMessageId
+                );
+            }
+
+            return Ok(new { success = result.success, error = result.error });
         }
 
         [HttpGet("conversations")]
