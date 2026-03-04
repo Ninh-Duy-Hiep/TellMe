@@ -65,30 +65,31 @@ namespace TellMe.Services
 
         public async Task<(bool success, string? messageId, string? error)> SendMessageToFacebookAsync(string recipientPsid, string text, string? replyToId = null)
         {
+            var pageId = _configuration["Facebook:PageID"];
             var pageAccessToken = _configuration["Facebook:PageToken"];
-            var url = $"https://graph.facebook.com/v19.0/me/messages?access_token={pageAccessToken}";
+            var url = $"https://graph.facebook.com/v19.0/{pageId}/messages?access_token={pageAccessToken}";
 
-            object messagePayload;
+            object payload;
 
             if (!string.IsNullOrEmpty(replyToId))
             {
-                messagePayload = new
+                payload = new
                 {
-                    text = text,
+                    recipient = new { id = recipientPsid },
+                    messaging_type = "RESPONSE",
+                    message = new { text = text },
                     reply_to = new { mid = replyToId }
                 };
             }
             else
             {
-                messagePayload = new { text = text };
+                payload = new
+                {
+                    recipient = new { id = recipientPsid },
+                    messaging_type = "RESPONSE",
+                    message = new { text = text }
+                };
             }
-
-            var payload = new
-            {
-                recipient = new { id = recipientPsid },
-                message = messagePayload,
-                messaging_type = "RESPONSE"
-            };
 
             var jsonPayload = JsonSerializer.Serialize(payload);
             var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
